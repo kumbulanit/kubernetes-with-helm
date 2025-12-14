@@ -439,6 +439,88 @@ show_environment_status() {
     print_success "Environment status check complete!"
 }
 
+# Setup services to start automatically on boot
+setup_autostart() {
+    print_header "Configuring Auto-Start on Boot"
+    
+    read -p "Do you want Docker and Minikube to start automatically after reboot? (y/n) " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        print_info "Skipping auto-start configuration"
+        return
+    fi
+    
+    # Ensure Docker starts on boot (should already be enabled)
+    print_info "Ensuring Docker starts on boot..."
+    sudo systemctl enable docker
+    sudo systemctl enable containerd
+    print_success "Docker configured to start on boot"
+    
+    # Create systemd service for Minikube
+    print_info "Creating Minikube systemd service..."
+    
+    # Get the current user
+    CURRENT_USER=$(whoami)
+    
+    # Create the systemd service file
+    sudo tee /etc/systemd/system/minikube.service > /dev/null <<EOF
+[Unit]
+Description=Minikube Kubernetes Cluster
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=${CURRENT_USER}
+ExecStart=/usr/local/bin/minikube start --driver=docker
+ExecStop=/usr/local/bin/minikube stop
+Environment="MINIKUBE_HOME=/home/${CURRENT_USER}/.minikube"
+Environment="KUBECONFIG=/home/${CURRENT_USER}/.kube/config"
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    
+    # Reload systemd and enable the service
+    sudo systemctl daemon-reload
+    sudo systemctl enable minikube.service
+    
+    print_success "Minikube configured to start on boot"
+    
+    # Create a script to fix docker socket permissions on boot
+    print_info "Creating docker socket permission fix for boot..."
+    sudo tee /etc/systemd/system/docker-sock-fix.service > /dev/null <<EOF
+[Unit]
+Description=Fix Docker Socket Permissions
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/chmod 666 /var/run/docker.sock
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    
+    sudo systemctl daemon-reload
+    sudo systemctl enable docker-sock-fix.service
+    
+    print_success "Docker socket permissions will be fixed on boot"
+    
+    echo -e "\n${BLUE}Auto-start services enabled:${NC}"
+    echo "  • docker.service - Docker daemon"
+    echo "  • containerd.service - Container runtime"
+    echo "  • docker-sock-fix.service - Docker socket permissions"
+    echo "  • minikube.service - Minikube cluster"
+    echo ""
+    print_info "After reboot, services will start in this order:"
+    echo "  1. Docker → 2. Fix socket permissions → 3. Minikube"
+    print_success "Auto-start configuration complete!"
+}
+
 # Print final instructions
 print_final_instructions() {
     print_header "Setup Complete!"
@@ -497,6 +579,7 @@ main() {
     setup_helm_repos
     verify_helm_deployment
     show_environment_status
+    setup_autostart
     print_final_instructions
 }
 
