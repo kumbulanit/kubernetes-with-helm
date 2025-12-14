@@ -144,9 +144,14 @@ install_docker() {
     sudo systemctl start docker
     sudo systemctl enable docker
     
+    # Fix Docker socket permissions for immediate use (avoids permission denied errors)
+    print_info "Fixing Docker socket permissions for immediate use..."
+    sudo chmod 666 /var/run/docker.sock
+    
     print_success "Docker installed successfully"
-    print_warning "You may need to log out and back in for docker group changes to take effect"
+    print_warning "For permanent docker group membership, log out and back in"
     print_info "Or run: newgrp docker"
+    print_info "Docker socket permissions have been temporarily fixed for this session"
 }
 
 # Install kubectl
@@ -351,6 +356,89 @@ setup_helm_repos() {
     helm repo list
 }
 
+# Verify environment by deploying a test Helm chart
+verify_helm_deployment() {
+    print_header "Verifying Helm Deployment"
+    
+    read -p "Do you want to deploy a test Nginx chart to verify everything works? (y/n) " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        print_info "Skipping test deployment"
+        return
+    fi
+    
+    # Check if minikube is running
+    if ! minikube status 2>/dev/null | grep -q "Running"; then
+        print_error "Minikube is not running. Please start it first."
+        return 1
+    fi
+    
+    # Deploy nginx using Helm
+    print_info "Deploying test nginx chart..."
+    helm install test-nginx bitnami/nginx --set service.type=ClusterIP --wait --timeout 300s
+    
+    if [ $? -eq 0 ]; then
+        print_success "Test nginx chart deployed successfully!"
+        
+        # Show the release
+        echo -e "\n${BLUE}Helm Releases:${NC}"
+        helm list
+        
+        # Show the pods
+        echo -e "\n${BLUE}Pods created:${NC}"
+        kubectl get pods -l app.kubernetes.io/name=nginx
+        
+        # Show the service
+        echo -e "\n${BLUE}Service created:${NC}"
+        kubectl get svc test-nginx
+        
+        print_success "Helm deployment verification complete!"
+        
+        # Offer to clean up
+        echo ""
+        read -p "Do you want to remove the test deployment? (y/n) " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            helm uninstall test-nginx
+            print_success "Test deployment removed"
+        else
+            print_info "Test deployment left running. Remove later with: helm uninstall test-nginx"
+        fi
+    else
+        print_error "Failed to deploy test nginx chart"
+        print_info "Check the error messages above and try manually:"
+        print_info "  helm install test-nginx bitnami/nginx"
+    fi
+}
+
+# Show final status of the environment
+show_environment_status() {
+    print_header "Environment Status"
+    
+    echo -e "${BLUE}═══ MINIKUBE STATUS ═══${NC}"
+    minikube status 2>/dev/null || print_warning "Minikube not running"
+    
+    echo -e "\n${BLUE}═══ CLUSTER INFO ═══${NC}"
+    kubectl cluster-info 2>/dev/null || print_warning "Cannot connect to cluster"
+    
+    echo -e "\n${BLUE}═══ NODES ═══${NC}"
+    kubectl get nodes -o wide 2>/dev/null || print_warning "No nodes available"
+    
+    echo -e "\n${BLUE}═══ ALL PODS (all namespaces) ═══${NC}"
+    kubectl get pods --all-namespaces 2>/dev/null || print_warning "No pods found"
+    
+    echo -e "\n${BLUE}═══ HELM VERSION ═══${NC}"
+    helm version
+    
+    echo -e "\n${BLUE}═══ HELM REPOSITORIES ═══${NC}"
+    helm repo list 2>/dev/null || print_info "No repositories configured yet"
+    
+    echo -e "\n${BLUE}═══ HELM RELEASES ═══${NC}"
+    helm list --all-namespaces 2>/dev/null || print_info "No releases installed yet"
+    
+    print_success "Environment status check complete!"
+}
+
 # Print final instructions
 print_final_instructions() {
     print_header "Setup Complete!"
@@ -407,6 +495,8 @@ main() {
     verify_installations
     start_minikube
     setup_helm_repos
+    verify_helm_deployment
+    show_environment_status
     print_final_instructions
 }
 
