@@ -518,6 +518,34 @@ EOF
     echo ""
     print_info "After reboot, services will start in this order:"
     echo "  1. Docker → 2. Fix socket permissions → 3. Minikube"
+    
+    # Verify services are enabled
+    echo -e "\n${BLUE}═══ SERVICE ENABLED STATUS ═══${NC}"
+    echo -n "docker: "
+    systemctl is-enabled docker 2>/dev/null || echo "not found"
+    echo -n "containerd: "
+    systemctl is-enabled containerd 2>/dev/null || echo "not found"
+    echo -n "minikube: "
+    systemctl is-enabled minikube 2>/dev/null || echo "not found"
+    echo -n "docker-sock-fix: "
+    systemctl is-enabled docker-sock-fix 2>/dev/null || echo "not found"
+    
+    # Show current service status
+    echo -e "\n${BLUE}═══ CURRENT SERVICE STATUS ═══${NC}"
+    echo -e "\n${YELLOW}Docker Service:${NC}"
+    systemctl status docker --no-pager -l 2>/dev/null | head -5 || print_warning "Docker service not running"
+    
+    echo -e "\n${YELLOW}Minikube Service:${NC}"
+    systemctl status minikube --no-pager -l 2>/dev/null | head -5 || print_info "Minikube service will start after reboot"
+    
+    # Show minikube status
+    echo -e "\n${BLUE}═══ MINIKUBE STATUS ═══${NC}"
+    minikube status 2>/dev/null || print_info "Minikube cluster status"
+    
+    # Show kubectl nodes
+    echo -e "\n${BLUE}═══ KUBERNETES NODES ═══${NC}"
+    kubectl get nodes 2>/dev/null || print_warning "Cannot connect to cluster"
+    
     print_success "Auto-start configuration complete!"
 }
 
