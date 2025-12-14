@@ -57,9 +57,28 @@ This section covers installation for **Ubuntu 24.04 LTS** (primary), **macOS**, 
 
 Ubuntu 24.04 LTS (Noble Numbat) is our primary training platform. Follow these steps carefully.
 
-### Step 1: Install Docker on Ubuntu 24.04
+### 🚀 Quick Install (Automated Script)
 
-**Update your system first:**
+For a quick automated installation, use our setup script:
+
+```bash
+# Download and run the installation script
+cd training/scripts
+chmod +x install-ubuntu24.sh
+./install-ubuntu24.sh
+```
+
+The script will install Docker, kubectl, Minikube, and Helm with proper configuration. It includes verification steps and error handling.
+
+**Script location:** `training/scripts/install-ubuntu24.sh`
+
+---
+
+### Manual Installation Steps
+
+If you prefer to install manually, follow the steps below:
+
+### Step 1: Install Docker on Ubuntu 24.04
 
 ```bash
 sudo apt update && sudo apt upgrade -y
